@@ -17,7 +17,7 @@ const state = {
   routeData: new Map(),    // routeId → rides[]
   stopNames: new Map(),    // stopId → name
   favorites: loadFavorites(),
-  relativeTime: false,
+  relativeTime: localStorage.getItem('shuttle-relative-time') !== '0', // default true
   searchQuery: '',
   loading: true,
   error: null,
@@ -244,8 +244,12 @@ function wireEvents() {
   // Time toggle button
   const timeToggle = document.getElementById('btn-time-toggle');
   const timeLabel = document.getElementById('time-toggle-label');
+  // Set initial label to match loaded state
+  timeLabel.textContent = state.relativeTime ? ' absolute time' : ' relative time';
+
   timeToggle.addEventListener('click', () => {
     state.relativeTime = !state.relativeTime;
+    localStorage.setItem('shuttle-relative-time', state.relativeTime ? '1' : '0');
     timeLabel.textContent = state.relativeTime ? ' absolute time' : ' relative time';
     render();
   });
@@ -260,6 +264,7 @@ function wireEvents() {
       refreshAllRoutes();
     } else if (e.key === 'a' || e.key === 'A') {
       state.relativeTime = !state.relativeTime;
+      localStorage.setItem('shuttle-relative-time', state.relativeTime ? '1' : '0');
       const label = document.getElementById('time-toggle-label');
       if (label) label.textContent = state.relativeTime ? ' absolute time' : ' relative time';
       render();
