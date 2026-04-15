@@ -1,0 +1,361 @@
+// app.js — main entry point.
+// Orchestrates data fetching, rendering, refresh timer, and event wiring.
+
+import { fetchRouteList, fetchRouteSummary, extractStopNames } from './api.js';
+import {
+  buildStops,
+  loadFavorites,
+  saveFavorites,
+  toggleFavorite,
+  setNickname,
+} from './state.js';
+
+// ── App state ─────────────────────────────────────────────────────────────────
+
+const state = {
+  routes: [],
+  routeData: new Map(),    // routeId → rides[]
+  stopNames: new Map(),    // stopId → name
+  favorites: loadFavorites(),
+  relativeTime: false,
+  searchQuery: '',
+  loading: true,
+  error: null,
+  lastRefresh: null,
+  countdown: 30,
+};
+
+const REFRESH_INTERVAL = 30; // seconds
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+
+async function init() {
+  try {
+    state.routes = await fetchRouteList();
+  } catch (err) {
+    state.error = `Failed to load routes: ${err.message}`;
+    state.loading = false;
+    render();
+    return;
+  }
+  await refreshAllRoutes();
+  wireEvents();
+  startCountdown();
+}
+
+// ── Data refresh ──────────────────────────────────────────────────────────────
+
+async function refreshAllRoutes() {
+  state.loading = true;
+  render();
+
+  await Promise.all(state.routes.map(async (route) => {
+    try {
+      const rides = await fetchRouteSummary(route.routeId);
+      state.routeData.set(route.routeId, rides);
+      // Merge stop names discovered from this route's rides
+      for (const [sid, name] of extractStopNames(rides)) {
+        state.stopNames.set(sid, name);
+      }
+    } catch {
+      // Leave stale data in place; the route will still render if we have prior data
+    }
+  }));
+
+  state.loading = false;
+  state.lastRefresh = new Date();
+  state.countdown = REFRESH_INTERVAL;
+  render();
+}
+
+// ── Countdown timer ───────────────────────────────────────────────────────────
+
+function startCountdown() {
+  setInterval(() => {
+    state.countdown = Math.max(0, state.countdown - 1);
+    updateCountdownDisplay();
+    if (state.countdown === 0) {
+      refreshAllRoutes();
+    }
+  }, 1000);
+}
+
+function updateCountdownDisplay() {
+  const el = document.getElementById('countdown');
+  if (el) {
+    el.textContent = state.lastRefresh
+      ? `next refresh in ${state.countdown}s`
+      : '';
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function render() {
+  const app = document.getElementById('app');
+  if (!app) return;
+
+  if (state.error) {
+    app.innerHTML = `<p class="error-msg">${escHtml(state.error)}</p>`;
+    return;
+  }
+
+  if (state.loading && state.routeData.size === 0) {
+    app.innerHTML = `<p class="loading-msg"><span class="spinner">⠋</span> Connecting…</p>`;
+    return;
+  }
+
+  const query = state.searchQuery.toLowerCase();
+  const now = new Date();
+  let html = '';
+
+  // Favorites section (hidden while searching)
+  if (!query && state.favorites.size > 0) {
+    const favStops = [];
+    const favSeen = new Set();
+    for (const route of state.routes) {
+      const rides = state.routeData.get(route.routeId) ?? [];
+      for (const stop of buildStops(rides, state.stopNames, state.favorites)) {
+        if (state.favorites.has(stop.stopId) && !favSeen.has(stop.stopId)) {
+          favSeen.add(stop.stopId);
+          const nick = state.favorites.get(stop.stopId);
+          favStops.push({ ...stop, name: nick || stop.name });
+        }
+      }
+    }
+    if (favStops.length > 0) {
+      html += renderSection('Favorites', favStops, now, true);
+    }
+  }
+
+  // Route sections
+  for (const route of state.routes) {
+    const rides = state.routeData.get(route.routeId) ?? [];
+    const stops = buildStops(rides, state.stopNames, state.favorites);
+    const filtered = query
+      ? stops.filter(s => s.name.toLowerCase().includes(query))
+      : stops;
+
+    if (filtered.length === 0) continue;
+
+    const label = route.name.replace(/^Intercampus-/, '');
+    const isLoading = state.loading && rides.length === 0;
+    html += renderSection(label, filtered, now, false, isLoading);
+  }
+
+  if (!html) {
+    html = `<p class="loading-msg" style="color:var(--color-dim)">No stops match "${escHtml(query)}".</p>`;
+  }
+
+  app.innerHTML = html;
+  rewireStopButtons();
+  updateCountdownDisplay();
+}
+
+function renderSection(label, stops, now, isFavSection, isLoading = false) {
+  const spinner = isLoading ? '<span class="spinner">⠋</span> ' : '';
+  let html = `<div class="route-section">`;
+  html += `<div class="route-header">${spinner}${escHtml(label)}</div>`;
+  for (const stop of stops) {
+    html += renderStopRow(stop, now, isFavSection);
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderStopRow(stop, now, isFav) {
+  const isFavStop = state.favorites.has(stop.stopId);
+  const starClass = isFavStop ? 'fav-btn is-fav' : 'fav-btn';
+  const starChar = isFavStop ? '★' : '☆';
+
+  const chipsHtml = stop.arrivals.map((a, i) => {
+    const sep = i > 0 ? '<span class="chip-sep">·</span>' : '';
+    return sep + renderChip(a, now);
+  }).join('');
+
+  // Show inline nickname editor if this stop is being renamed
+  const nameHtml = state.nicknamingStopId === stop.stopId
+    ? `<input class="nick-input" id="nick-input" type="text" value="${escAttr(state.favorites.get(stop.stopId) ?? '')}" placeholder="${escAttr(stop.name)}" maxlength="40" autofocus>`
+    : `<span class="stop-name">${escHtml(stop.name)}</span>`;
+
+  return `<div class="stop-row" data-stop-id="${escAttr(stop.stopId)}">` +
+    `<button class="${starClass}" data-action="fav" data-stop-id="${escAttr(stop.stopId)}" aria-label="${isFavStop ? 'unfavorite' : 'favorite'}">${starChar}</button>` +
+    nameHtml +
+    `<div class="arrivals">${chipsHtml}</div>` +
+    `</div>`;
+}
+
+// Translates renderArrivalChip() from view.go:238
+function renderChip(arrival, now) {
+  const mins = (arrival.eta - now) / 60000;
+
+  let urgency;
+  let dotChar;
+  if (mins < 0) {
+    urgency = 'past';
+    dotChar = '·';
+  } else if (mins < 5) {
+    urgency = 'imminent';
+    dotChar = '●';
+  } else if (mins < 15) {
+    urgency = 'near';
+    dotChar = '●';
+  } else {
+    urgency = 'far';
+    dotChar = arrival.isActive ? '●' : '○';
+  }
+
+  let timeStr;
+  if (state.relativeTime) {
+    const m = Math.round(mins);
+    timeStr = m < 0 ? `${-m}m ago` : `in ${m}m`;
+  } else {
+    timeStr = arrival.eta.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  let lateHtml = '';
+  if (arrival.lateSec > 90) {
+    const lateMin = Math.floor(arrival.lateSec / 60);
+    lateHtml = `<span class="chip-late">+${lateMin}m</span>`;
+  }
+
+  return `<span class="chip ${urgency}">` +
+    `<span class="chip-dot">${dotChar}</span>` +
+    `<span class="chip-time">${escHtml(timeStr)}</span>` +
+    lateHtml +
+    `</span>`;
+}
+
+// ── Event wiring ──────────────────────────────────────────────────────────────
+
+function wireEvents() {
+  // Search input
+  document.getElementById('search-input').addEventListener('input', (e) => {
+    state.searchQuery = e.target.value;
+    render();
+  });
+
+  // Refresh button
+  document.getElementById('btn-refresh').addEventListener('click', () => {
+    state.countdown = REFRESH_INTERVAL;
+    refreshAllRoutes();
+  });
+
+  // Time toggle button
+  const timeToggle = document.getElementById('btn-time-toggle');
+  const timeLabel = document.getElementById('time-toggle-label');
+  timeToggle.addEventListener('click', () => {
+    state.relativeTime = !state.relativeTime;
+    timeLabel.textContent = state.relativeTime ? ' absolute time' : ' relative time';
+    render();
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Don't interfere when typing in an input
+    if (e.target.tagName === 'INPUT') return;
+
+    if (e.key === 'r' || e.key === 'R') {
+      state.countdown = REFRESH_INTERVAL;
+      refreshAllRoutes();
+    } else if (e.key === 'a' || e.key === 'A') {
+      state.relativeTime = !state.relativeTime;
+      const label = document.getElementById('time-toggle-label');
+      if (label) label.textContent = state.relativeTime ? ' absolute time' : ' relative time';
+      render();
+    } else if (e.key === '/') {
+      e.preventDefault();
+      document.getElementById('search-input')?.focus();
+    } else if (e.key === 'Escape') {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput && document.activeElement === searchInput) {
+        searchInput.value = '';
+        state.searchQuery = '';
+        render();
+        searchInput.blur();
+      }
+    }
+  });
+}
+
+// Re-attaches click handlers to dynamically rendered stop row buttons.
+function rewireStopButtons() {
+  // Favorite toggle buttons
+  document.querySelectorAll('[data-action="fav"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sid = btn.dataset.stopId;
+      if (state.favorites.has(sid)) {
+        // Second click on a favorite → open nickname editor
+        if (state.nicknamingStopId === sid) {
+          state.nicknamingStopId = null;
+          render();
+        } else {
+          state.nicknamingStopId = sid;
+          render();
+          // Focus the input after render
+          const inp = document.getElementById('nick-input');
+          inp?.focus();
+          inp?.select();
+        }
+      } else {
+        state.favorites = toggleFavorite(state.favorites, sid);
+        saveFavorites(state.favorites);
+        state.nicknamingStopId = null;
+        render();
+      }
+    });
+  });
+
+  // Nickname input
+  const nickInput = document.getElementById('nick-input');
+  if (nickInput) {
+    nickInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        commitNickname(nickInput.value);
+      } else if (e.key === 'Escape') {
+        state.nicknamingStopId = null;
+        render();
+      }
+    });
+    nickInput.addEventListener('blur', () => {
+      // Small delay to let click events fire first
+      setTimeout(() => {
+        if (state.nicknamingStopId !== null) {
+          commitNickname(nickInput.value);
+        }
+      }, 150);
+    });
+  }
+
+  // Click on a favorited stop's star a second time (handled above),
+  // but also allow clicking the stop row itself to unfavorite with confirmation
+  // — keeping it simple: single click on ★ toggles unfav, double click = rename.
+}
+
+function commitNickname(value) {
+  if (state.nicknamingStopId) {
+    state.favorites = setNickname(state.favorites, state.nicknamingStopId, value);
+    saveFavorites(state.favorites);
+    state.nicknamingStopId = null;
+    render();
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function escAttr(str) {
+  return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+
+init();

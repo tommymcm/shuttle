@@ -1,0 +1,262 @@
+/* style.css — visual styles for Shuttle web UI.
+   Color palette maps directly from styles.go lipgloss ANSI colors. */
+
+:root {
+  --color-bg:        #1a1a1a;
+  --color-surface:   #262626;   /* ANSI 235 — selected row bg */
+  --color-dim:       #585858;   /* ANSI 240 — dimStyle */
+  --color-route:     #00afaf;   /* ANSI 36  — directionStyle (teal) */
+  --color-imminent:  #ff0000;   /* ANSI 196 — redBoldStyle (<5 min) */
+  --color-near:      #ffff00;   /* ANSI 226 — yellowStyle (<15 min) */
+  --color-late:      #ff8700;   /* ANSI 208 — lateStyle */
+  --color-fav:       #ffd700;   /* ANSI 220 — favoriteStyle (gold) */
+  --color-text:      #e0e0e0;
+  --color-border:    #3a3a3a;
+  --bar-height:      2.5rem;
+  --search-height:   2.75rem;
+  --font: ui-monospace, 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Search bar (top) ──────────────────────────────────────────────── */
+
+#search-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  height: var(--search-height);
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: 0.5rem;
+}
+
+#search-bar label {
+  color: var(--color-dim);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+#search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 0.95em;
+  caret-color: var(--color-route);
+}
+
+#search-input::placeholder {
+  color: var(--color-dim);
+}
+
+/* ── Main content area ─────────────────────────────────────────────── */
+
+#app {
+  padding: 0 1rem calc(var(--bar-height) + 0.5rem);
+  min-height: calc(100vh - var(--search-height) - var(--bar-height));
+}
+
+/* ── Route sections ────────────────────────────────────────────────── */
+
+.route-section {
+  margin-top: 1.25rem;
+}
+
+.route-header {
+  font-weight: bold;
+  color: var(--color-route);
+  margin-bottom: 0.25rem;
+  padding-left: 0.25rem;
+}
+
+/* ── Stop rows ─────────────────────────────────────────────────────── */
+
+.stop-row {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr auto;
+  align-items: center;
+  gap: 0 0.5rem;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  min-height: 1.6rem;
+  cursor: default;
+}
+
+.stop-row:hover {
+  background: var(--color-surface);
+}
+
+.fav-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.95em;
+  line-height: 1;
+  color: var(--color-dim);
+  width: 1.2rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.fav-btn.is-fav {
+  color: var(--color-fav);
+}
+
+.stop-name {
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.arrivals {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── Arrival chips ─────────────────────────────────────────────────── */
+
+.chip-sep {
+  color: var(--color-dim);
+  padding: 0 0.4rem;
+  font-size: 0.8em;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.chip-dot {
+  font-size: 0.7em;
+}
+
+.chip-time {
+  min-width: 3.2em;
+}
+
+.chip-late {
+  color: var(--color-late);
+  font-size: 0.85em;
+}
+
+/* Urgency color classes — applied to both dot and time */
+.chip.past    .chip-dot,
+.chip.past    .chip-time { color: var(--color-dim); }
+
+.chip.imminent .chip-dot,
+.chip.imminent .chip-time { color: var(--color-imminent); font-weight: bold; }
+
+.chip.near    .chip-dot,
+.chip.near    .chip-time { color: var(--color-near); }
+
+.chip.far     .chip-dot,
+.chip.far     .chip-time { color: var(--color-dim); }
+
+/* ── Nickname inline editor ────────────────────────────────────────── */
+
+.nick-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-route);
+  outline: none;
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 0.95em;
+  width: 12rem;
+  padding: 0 0.1rem;
+}
+
+/* ── Status bar (bottom) ───────────────────────────────────────────── */
+
+#status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bar-height);
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: 1rem;
+  z-index: 10;
+  font-size: 0.85em;
+}
+
+.bar-btn {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 0.85em;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.bar-btn:hover {
+  color: var(--color-route);
+}
+
+.bar-btn .key {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.bar-btn .desc {
+  color: var(--color-dim);
+}
+
+#countdown {
+  color: var(--color-dim);
+  margin-left: auto;
+}
+
+/* ── Loading / error states ────────────────────────────────────────── */
+
+.loading-msg,
+.error-msg {
+  padding: 2rem 1rem;
+  color: var(--color-dim);
+}
+
+.error-msg {
+  color: var(--color-imminent);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
