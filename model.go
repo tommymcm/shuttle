@@ -139,7 +139,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tickCount++
 		if m.tickCount >= refreshInterval {
 			m.tickCount = 0
-			return m, m.doRefresh()
+			return m, tea.Batch(m.doRefresh(), tickCmd())
 		}
 		return m, tickCmd()
 
@@ -236,12 +236,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) doRefresh() tea.Cmd {
 	m.tickCount = 0
-	cmds := make([]tea.Cmd, 0, len(m.routes)+1)
+	cmds := make([]tea.Cmd, 0, len(m.routes))
 	for _, r := range m.routes {
 		m.pendingRoutes[r.RouteID] = struct{}{}
 		cmds = append(cmds, fetchRouteSummary(r.RouteID))
 	}
-	cmds = append(cmds, tickCmd())
 	return tea.Batch(cmds...)
 }
 
