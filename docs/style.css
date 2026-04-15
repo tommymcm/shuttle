@@ -278,6 +278,46 @@ html, body {
   margin-left: auto;
 }
 
+/* ── Timer chip indicator ──────────────────────────────────────────── */
+
+.chip-timer-bell {
+  font-size: 0.75em;
+  margin-left: 0.1rem;
+}
+
+.chip.has-timer {
+  outline: 1px solid currentColor;
+  border-radius: 3px;
+  outline-offset: 1px;
+}
+
+/* ── Toast notification ────────────────────────────────────────────── */
+
+#toast {
+  position: fixed;
+  bottom: calc(var(--bar-height) + 0.75rem);
+  left: 50%;
+  transform: translateX(-50%) translateY(0.5rem);
+  background: #333;
+  color: #fff;
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85em;
+  white-space: nowrap;
+  max-width: calc(100vw - 2rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 20;
+}
+
+#toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ── Loading / error states ────────────────────────────────────────── */
 
 .loading-msg,

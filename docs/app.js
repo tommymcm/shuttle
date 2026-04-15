@@ -24,6 +24,7 @@ const state = {
   lastRefresh: null,
   countdown: 30,
   expandedStopId: null,    // stopId whose full schedule is shown
+  timers: new Map(),       // eta.getTime() → setTimeout ID
 };
 
 const REFRESH_INTERVAL = 30; // seconds
@@ -270,10 +271,16 @@ function renderChip(arrival, now, extraClass = '', primary = false) {
     lateHtml = `<span class="chip-late">+${lateMin}m</span>`;
   }
 
-  return `<span class="chip ${urgency}${extraClass}">` +
+  const etaKey = arrival.eta.getTime();
+  const hasTimer = state.timers.has(etaKey);
+  const timerHtml = hasTimer ? `<span class="chip-timer-bell">🔔</span>` : '';
+  const timerClass = hasTimer ? ' has-timer' : '';
+
+  return `<span class="chip ${urgency}${extraClass}${timerClass}" data-action="timer" data-eta="${etaKey}" style="cursor:pointer">` +
     `<span class="chip-dot">${dotChar}</span>` +
     `<span class="chip-time">${escHtml(timeStr)}</span>` +
     lateHtml +
+    timerHtml +
     `</span>`;
 }
 
@@ -393,9 +400,14 @@ function rewireStopButtons() {
     });
   }
 
-  // Click on a favorited stop's star a second time (handled above),
-  // but also allow clicking the stop row itself to unfavorite with confirmation
-  // — keeping it simple: single click on ★ toggles unfav, double click = rename.
+  // Chip click → set/cancel 10-minute departure timer
+  document.querySelectorAll('[data-action="timer"]').forEach((chip) => {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const etaKey = parseInt(chip.dataset.eta, 10);
+      setDepartureTimer(new Date(etaKey));
+    });
+  });
 }
 
 function commitNickname(value) {
@@ -405,6 +417,65 @@ function commitNickname(value) {
     state.nicknamingStopId = null;
     render();
   }
+}
+
+// ── Departure timers ──────────────────────────────────────────────────────────
+
+async function setDepartureTimer(eta) {
+  const etaKey = eta.getTime();
+
+  // Toggle off if already set
+  if (state.timers.has(etaKey)) {
+    clearTimeout(state.timers.get(etaKey));
+    state.timers.delete(etaKey);
+    render();
+    showToast('Timer cancelled.');
+    return;
+  }
+
+  const fireAt = new Date(eta - 10 * 60 * 1000);
+  const delay = fireAt - Date.now();
+  const timeStr = eta.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  if (delay <= 0) {
+    showToast(`Departure at ${timeStr} is less than 10 minutes away!`);
+    return;
+  }
+
+  // Request notification permission (requires user gesture — we're in a click handler)
+  let canNotify = false;
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      canNotify = true;
+    } else if (Notification.permission !== 'denied') {
+      canNotify = (await Notification.requestPermission()) === 'granted';
+    }
+  }
+
+  const id = setTimeout(() => {
+    state.timers.delete(etaKey);
+    render();
+    const msg = `Your shuttle departs at ${timeStr} — time to head out!`;
+    if (canNotify) {
+      new Notification('Shuttle departing in 10 minutes', { body: msg, icon: 'favicon.ico' });
+    }
+    showToast(msg);
+  }, delay);
+
+  state.timers.set(etaKey, id);
+  render();
+  showToast(`Timer set — you'll be notified 10 min before ${timeStr}.`);
+}
+
+let toastTimer = null;
+
+function showToast(msg) {
+  let toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
