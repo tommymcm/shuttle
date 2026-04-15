@@ -25,4 +25,7 @@ var (
 	favoriteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220")) // gold ★
 	selectedStyle = lipgloss.NewStyle().Background(lipgloss.Color("235")) // subtle row highlight
 	cursorStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("82"))  // green >
+
+	keybindKeyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("255")) // white
+	keybindDescStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240")) // dim
 )

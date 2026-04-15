@@ -16,6 +16,19 @@ func (m model) View() string {
 	return m.renderBoard() + "\n" + m.renderBar()
 }
 
+type keybind struct {
+	key  string
+	desc string
+}
+
+func renderKeybinds(binds []keybind) string {
+	parts := make([]string, len(binds))
+	for i, b := range binds {
+		parts[i] = keybindKeyStyle.Render(b.key) + keybindDescStyle.Render(" "+b.desc)
+	}
+	return strings.Join(parts, keybindDescStyle.Render("  "))
+}
+
 func (m model) renderBar() string {
 	var status string
 	if m.loading && len(m.routeData) == 0 {
@@ -27,12 +40,22 @@ func (m model) renderBar() string {
 
 	if m.nicknaming {
 		stopName := m.stopNames[m.nicknamingStopID]
-		return dimStyle.Render("enter/esc  nickname for "+stopName+":  ") + m.nicknameInput.View() + "\n"
+		return renderKeybinds([]keybind{{"enter/esc", "nickname for " + stopName + ":"}}) + "  " + m.nicknameInput.View() + "\n"
 	}
 	if m.searching {
-		return dimStyle.Render("esc to clear  ") + m.searchInput.View() + "  " + status + "\n"
+		return renderKeybinds([]keybind{{"esc", "clear"}}) + "  " + m.searchInput.View() + "  " + status + "\n"
 	}
-	return dimStyle.Render("/ search  j/k move  f fav  n nickname  a abs/rel  r refresh  q quit  ") + status + "\n"
+
+	binds := []keybind{
+		{"/", "search"},
+		{"j/k", "move"},
+		{"f", "fav"},
+		{"n", "nickname"},
+		{"a", "abs/rel"},
+		{"r", "refresh"},
+		{"q", "quit"},
+	}
+	return renderKeybinds(binds) + "  " + status + "\n"
 }
 
 func (m model) renderBoard() string {
