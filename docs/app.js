@@ -145,7 +145,9 @@ function render() {
   }
 
   if (!html) {
-    html = `<p class="loading-msg" style="color:var(--color-dim)">No stops match "${escHtml(query)}".</p>`;
+    html = query
+      ? `<p class="loading-msg" style="color:var(--color-dim)">No stops match "${escHtml(query)}".</p>`
+      : `<p class="loading-msg" style="color:var(--color-dim)">No active routes right now.</p>`;
   }
 
   app.innerHTML = html;

@@ -81,7 +81,7 @@ export function buildStops(rides, stopNames, favorites) {
   for (const ride of rides) {
     if (ride.vias?.length > 0) {
       stopOrder = ride.vias
-        .map(viaMap => Object.keys(viaMap)[0])
+        .map(viaMap => Object.values(viaMap)[0]?.stop?.stopId)
         .filter(Boolean);
       break;
     }
