@@ -106,7 +106,7 @@ function render() {
     return;
   }
 
-  const query = state.searchQuery.toLowerCase();
+  const query = state.searchQuery.trim().toLowerCase();
   const now = new Date();
   let html = '';
 
