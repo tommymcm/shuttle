@@ -23,6 +23,7 @@ const state = {
   error: null,
   lastRefresh: null,
   countdown: 30,
+  expandedStopId: null,    // stopId whose full schedule is shown
 };
 
 const REFRESH_INTERVAL = 30; // seconds
@@ -165,6 +166,7 @@ function renderSection(label, stops, now, isFavSection, isLoading = false) {
 
 function renderStopRow(stop, now, isFav) {
   const isFavStop = state.favorites.has(stop.stopId);
+  const isExpanded = state.expandedStopId === stop.stopId;
   const starClass = isFavStop ? 'fav-btn is-fav' : 'fav-btn';
   const starChar = isFavStop ? '★' : '☆';
 
@@ -174,18 +176,55 @@ function renderStopRow(stop, now, isFav) {
     return sep + renderChip(a, now, extra);
   }).join('');
 
-  // Clicking the name of a favorited stop opens the nickname editor
+  // Favorited names open the nickname editor; all other names toggle the expanded schedule
   const nameEl = state.nicknamingStopId === stop.stopId
     ? `<input class="nick-input" id="nick-input" type="text" value="${escAttr(state.favorites.get(stop.stopId) ?? '')}" placeholder="${escAttr(stop.name)}" maxlength="40" autofocus>`
     : isFavStop
       ? `<span class="stop-name fav-name" data-action="nickname" data-stop-id="${escAttr(stop.stopId)}" title="Click to set nickname">${escHtml(stop.name)}</span>`
-      : `<span class="stop-name">${escHtml(stop.name)}</span>`;
+      : `<span class="stop-name expandable${isExpanded ? ' is-expanded' : ''}" data-action="expand" data-stop-id="${escAttr(stop.stopId)}">${escHtml(stop.name)}</span>`;
 
-  return `<div class="stop-row" data-stop-id="${escAttr(stop.stopId)}">` +
+  const expandedHtml = isExpanded ? renderExpandedSchedule(stop.stopId, now) : '';
+
+  return `<div class="stop-row${isExpanded ? ' is-expanded' : ''}" data-stop-id="${escAttr(stop.stopId)}">` +
+    `<div class="stop-row-main">` +
     `<button class="${starClass}" data-action="fav" data-stop-id="${escAttr(stop.stopId)}" aria-label="${isFavStop ? 'unfavorite' : 'favorite'}">${starChar}</button>` +
     nameEl +
     `<div class="arrivals">${chipsHtml}</div>` +
+    `</div>` +
+    expandedHtml +
     `</div>`;
+}
+
+// Returns all future arrivals for a stop across all routes, uncapped, sorted by ETA.
+function getAllArrivalsForStop(stopId) {
+  const arrivals = [];
+  for (const rides of state.routeData.values()) {
+    for (const ride of rides) {
+      if ('Completed' in (ride.state ?? {})) continue;
+      const isActive = 'Active' in (ride.state ?? {});
+      for (const ssMap of (ride.stopStatus ?? [])) {
+        const info = ssMap['Awaiting'];
+        if (info?.stopId !== stopId || !info?.expectedArrivalTime) continue;
+        const eta = new Date(info.expectedArrivalTime);
+        if (isNaN(eta.getTime())) continue;
+        arrivals.push({ eta, isActive, lateSec: ride.lateBySec ?? 0 });
+      }
+    }
+  }
+  arrivals.sort((a, b) => a.eta - b.eta);
+  return arrivals;
+}
+
+function renderExpandedSchedule(stopId, now) {
+  const arrivals = getAllArrivalsForStop(stopId);
+  if (arrivals.length === 0) {
+    return `<div class="stop-expanded"><span class="dim">No more departures today.</span></div>`;
+  }
+  const chipsHtml = arrivals.map((a, i) => {
+    const sep = i > 0 ? `<span class="chip-sep">·</span>` : '';
+    return sep + renderChip(a, now);
+  }).join('');
+  return `<div class="stop-expanded">${chipsHtml}</div>`;
 }
 
 // Translates renderArrivalChip() from view.go:238
@@ -297,6 +336,16 @@ function rewireStopButtons() {
       state.favorites = toggleFavorite(state.favorites, sid);
       saveFavorites(state.favorites);
       if (!state.favorites.has(sid)) state.nicknamingStopId = null;
+      render();
+    });
+  });
+
+  // Stop name click (non-favorite) → toggle expanded schedule
+  document.querySelectorAll('[data-action="expand"]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sid = el.dataset.stopId;
+      state.expandedStopId = state.expandedStopId === sid ? null : sid;
       render();
     });
   });

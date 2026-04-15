@@ -91,18 +91,22 @@ html, body {
 /* ── Stop rows ─────────────────────────────────────────────────────── */
 
 .stop-row {
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+
+.stop-row:hover,
+.stop-row.is-expanded {
+  background: var(--color-surface);
+}
+
+.stop-row-main {
   display: grid;
   grid-template-columns: 1.4rem 1fr auto;
   align-items: center;
   gap: 0 0.5rem;
-  padding: 0.1rem 0.25rem;
-  border-radius: 3px;
   min-height: 1.6rem;
-  cursor: default;
-}
-
-.stop-row:hover {
-  background: var(--color-surface);
+  padding: 0.1rem 0;
 }
 
 .fav-btn {
@@ -183,6 +187,31 @@ html, body {
 
 .fav-name {
   cursor: text;
+}
+
+.expandable {
+  cursor: pointer;
+}
+
+.expandable.is-expanded {
+  color: var(--color-route);
+}
+
+/* ── Expanded schedule panel ───────────────────────────────────────── */
+
+.stop-expanded {
+  padding: 0.35rem 0 0.5rem 1.9rem; /* indent past the star column */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  margin-top: 0.1rem;
+}
+
+.dim {
+  color: var(--color-dim);
+  font-size: 0.9em;
 }
 
 .nick-input {
